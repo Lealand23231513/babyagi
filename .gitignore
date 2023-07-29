@@ -22,3 +22,6 @@ babycoder/objective.txt
 chroma/
 node_modules/
 .DS_Store
+
+# myself
+.text/
