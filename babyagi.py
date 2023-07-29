@@ -536,6 +536,21 @@ def context_agent(query: str, top_results_num: int):
     # print(results)
     return results
 
+def check_agent(
+        objective: str, result: Dict, task_description: str, task_list: List[str]
+):
+    prompt = f"""
+Check whether the result of the last completed task is satisfied with the objective.\n
+If the objective is satisfied, write "True", else write "False".\n
+The objective is : {objective}.
+The last completed task has the result: \n{result["data"]}
+This result was based on this task description: {task_description}.\n"""
+
+    print(f'\n*****CHECK AGENT PROMPT****\n{prompt}\n')
+    response = openai_call(prompt, max_tokens=2000)
+    print(f'\n****CHECK AGENT RESPONSE****\n{response}\n')
+    return response
+
 
 # Add the initial task if starting new objective
 if not JOIN_EXISTING_OBJECTIVE:
@@ -579,28 +594,43 @@ def main():
 
             results_storage.add(task, result, result_id)
 
-            # Step 3: Create new tasks and re-prioritize task list
-            # only the main instance in cooperative mode does that
-            new_tasks = task_creation_agent(
+            # Step 3: Check whether the objective is completed
+
+            check_result = check_agent(
                 OBJECTIVE,
                 enriched_result,
                 task["task_name"],
                 tasks_storage.get_task_names(),
             )
+            if check_result=="True":
+                print('Done.')
+                loop = False
+            elif check_result=="False":
+                # Step 4: Create new tasks and re-prioritize task list
+                # only the main instance in cooperative mode does that
+                new_tasks = task_creation_agent(
+                    OBJECTIVE,
+                    enriched_result,
+                    task["task_name"],
+                    tasks_storage.get_task_names(),
+                )
 
-            print('Adding new tasks to task_storage')
-            for new_task in new_tasks:
-                new_task.update({"task_id": tasks_storage.next_task_id()})
-                print(str(new_task))
-                tasks_storage.append(new_task)
+                print('Adding new tasks to task_storage')
+                for new_task in new_tasks:
+                    new_task.update({"task_id": tasks_storage.next_task_id()})
+                    print(str(new_task))
+                    tasks_storage.append(new_task)
 
-            if not JOIN_EXISTING_OBJECTIVE:
-                prioritized_tasks = prioritization_agent()
-                if prioritized_tasks:
-                    tasks_storage.replace(prioritized_tasks)
+                if not JOIN_EXISTING_OBJECTIVE:
+                    prioritized_tasks = prioritization_agent()
+                    if prioritized_tasks:
+                        tasks_storage.replace(prioritized_tasks)
 
-            # Sleep a bit before checking the task list again
-            time.sleep(5)
+                # Sleep a bit before checking the task list again
+                time.sleep(5)
+            else:
+                print("meet error!")
+                exit(1)
         else:
             print('Done.')
             loop = False
